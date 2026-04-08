@@ -70,7 +70,7 @@ export function personalizeMessage(
   template: string,
   contact: Record<string, unknown>
 ): { message: string; variables: string[] } {
-  const name = String(contact.display_name || contact.name || "");
+  const name = String(contact.name || contact.display_name || "");
   const governorate = String(contact.governorate || "");
   const category = String(contact.category || "");
   const variables = [name, governorate];
@@ -143,22 +143,21 @@ export async function sendCampaignBatches(
 
     await Promise.all(
       batch.map(async (contact) => {
+        // contact_view uses 'phone' and 'name'; contacts table uses 'normalized_phone' and 'display_name'
         const phone = String(
-          contact.whatsapp_phone || contact.normalized_phone || ""
+          contact.phone || contact.whatsapp_phone || contact.normalized_phone || ""
         );
         if (!phone) {
           failed++;
+          console.error(`[Nabda] SKIPPED - no phone for contact id=${contact.id} name=${contact.name || contact.display_name}`);
           return;
         }
-        const { message, variables } = personalizeMessage(
-          messageTemplate,
-          contact
-        );
+        const { message } = personalizeMessage(messageTemplate, contact);
         try {
           const result = await sendNabdaMessage(phone, message);
           await logSendResult(
             String(contact.id),
-            String(contact.normalized_phone || ""),
+            phone,
             message,
             "sent",
             undefined,
@@ -172,7 +171,7 @@ export async function sendCampaignBatches(
           console.error(`[Nabda] FAILED phone=${phone} error=${errorMsg}`);
           await logSendResult(
             String(contact.id),
-            String(contact.normalized_phone || ""),
+            phone,
             message,
             "failed",
             errorMsg

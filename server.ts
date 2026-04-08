@@ -171,8 +171,8 @@ async function sendCampaignBatches(
     // Process batch in parallel
     const batchPromises = batch.map(async (contact) => {
       try {
-        // Use whatsapp_phone if available, otherwise normalized_phone
-        const phone = contact.whatsapp_phone || contact.normalized_phone;
+        // contact_view uses 'phone'; contacts table uses 'normalized_phone'
+        const phone = contact.phone || contact.whatsapp_phone || contact.normalized_phone;
         
         if (!phone) {
           throw new Error("No phone number available");
