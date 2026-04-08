@@ -31,7 +31,7 @@ export default function App() {
   useEffect(() => {
     fetchData();
     
-    // Real-time subscriptions
+    // Real-time subscriptions (note: contact_view doesn't support realtime, so we listen to underlying table)
     const contactsSub = supabase.channel('contacts-all').on('postgres_changes', { event: '*', schema: 'public', table: 'contacts' }, fetchData).subscribe();
     const messagesSub = supabase.channel('messages-all').on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, fetchData).subscribe();
 
@@ -43,8 +43,25 @@ export default function App() {
 
   const fetchData = async () => {
     if (!supabase) return;
-    const { data: cData } = await supabase.from("contacts").select("*").order("created_at", { ascending: false });
-    if (cData) setContacts(cData);
+    // Use contact_view which has aliased columns: name (from display_name), phone (from normalized_phone)
+    const { data: cData } = await supabase.from("contact_view").select("*").order("name", { ascending: false });
+    if (cData) {
+      // Map view columns back to Contact type expected by components
+      const mappedContacts: Contact[] = cData.map((c: any) => ({
+        id: c.id,
+        display_name: c.name,
+        raw_phone: c.phone,
+        normalized_phone: c.phone,
+        whatsapp_phone: c.whatsapp_phone,
+        governorate: c.governorate,
+        category: c.category,
+        validity_status: 'valid',
+        duplicate_status: false,
+        ready_to_send: true,
+        created_at: new Date().toISOString(),
+      }));
+      setContacts(mappedContacts);
+    }
 
     const { data: mData } = await supabase.from("messages").select("status");
     
