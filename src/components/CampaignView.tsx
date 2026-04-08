@@ -29,7 +29,8 @@ export function CampaignView() {
     const { data: tData } = await supabase.from("templates").select("*");
     if (tData) setTemplates(tData);
 
-    const { data: cData } = await supabase.from("contacts").select("category, governorate");
+    // Use contact_view for fetching filter options
+    const { data: cData } = await supabase.from("contact_view").select("category, governorate");
     if (cData) {
       const cats = Array.from(new Set(cData.map(c => c.category).filter(Boolean))) as string[];
       const govs = Array.from(new Set(cData.map(c => c.governorate).filter(Boolean))) as string[];
@@ -39,7 +40,8 @@ export function CampaignView() {
   };
 
   const updateRecipientCount = async () => {
-    let query = supabase.from("contacts").select("id", { count: "exact", head: true }).eq("validity_status", "valid");
+    // Use contact_view - all contacts are considered valid
+    let query = supabase.from("contact_view").select("id", { count: "exact", head: true });
     if (selectedCategory !== "all") query = query.eq("category", selectedCategory);
     if (selectedGovernorate !== "all") query = query.eq("governorate", selectedGovernorate);
 
@@ -53,81 +55,34 @@ export function CampaignView() {
       return;
     }
 
-    const template = templates.find(t => t.id === selectedTemplate);
-    if (!template) return;
-
     setIsSending(true);
     setProgress(0);
 
     try {
-      // Fetch recipients
-      let query = supabase.from("contacts").select("*").eq("validity_status", "valid");
-      if (selectedCategory !== "all") query = query.eq("category", selectedCategory);
-      if (selectedGovernorate !== "all") query = query.eq("governorate", selectedGovernorate);
+      // Build filters
+      const filters: any = {};
+      if (selectedCategory !== "all") filters.category = selectedCategory;
+      if (selectedGovernorate !== "all") filters.governorate = selectedGovernorate;
 
-      const { data: recipients } = await query;
-      if (!recipients || recipients.length === 0) {
-        toast.error("No recipients found");
-        setIsSending(false);
-        return;
+      // Call bulk campaign API
+      const response = await fetch("/api/campaign/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          templateId: selectedTemplate,
+          filters: filters,
+          testMode: false
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success(`Campaign sent! ${result.sent} delivered, ${result.failed} failed`);
+        setProgress(100);
+      } else {
+        toast.error("Campaign failed: " + (result.error || "Unknown error"));
       }
-
-      toast.info(`Starting campaign for ${recipients.length} recipients...`);
-
-      for (let i = 0; i < recipients.length; i++) {
-        const contact = recipients[i];
-        
-        // Replace placeholders
-        const messageText = template.content
-          .replace(/{{name}}/g, contact.display_name)
-          .replace(/{{category}}/g, contact.category || "");
-
-        // Create message record
-        const { data: msgData, error: msgError } = await supabase.from("messages").insert([{
-          contact_id: contact.id,
-          normalized_phone: contact.normalized_phone,
-          message: messageText,
-          status: "pending"
-        }]).select().single();
-
-        if (msgError) continue;
-
-        // Call our backend to send the message
-        try {
-          const response = await fetch("/api/send-whatsapp", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              phone: contact.normalized_phone,
-              message: messageText
-            })
-          });
-
-          const result = await response.json();
-
-          if (result.success) {
-            await supabase.from("messages").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", msgData.id);
-            await supabase.from("send_logs").insert([{
-              message_id: msgData.id,
-              status: "success",
-              response: result
-            }]);
-          } else {
-            await supabase.from("messages").update({ status: "failed", error: result.error }).eq("id", msgData.id);
-          }
-        } catch (err) {
-          await supabase.from("messages").update({ status: "failed", error: "Network error" }).eq("id", msgData.id);
-        }
-
-        setProgress(Math.round(((i + 1) / recipients.length) * 100));
-        
-        // Rate limiting: 4 seconds between messages
-        if (i < recipients.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 4000));
-        }
-      }
-
-      toast.success("Campaign completed!");
     } catch (error: any) {
       toast.error("Campaign failed: " + error.message);
     } finally {

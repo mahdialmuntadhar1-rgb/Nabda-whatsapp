@@ -43,25 +43,56 @@ export default function App() {
 
   const fetchData = async () => {
     if (!supabase) return;
-    // Use contact_view which has aliased columns: name (from display_name), phone (from normalized_phone)
-    const { data: cData } = await supabase.from("contact_view").select("*").order("name", { ascending: false });
-    if (cData) {
-      // Map view columns back to Contact type expected by components
-      const mappedContacts: Contact[] = cData.map((c: any) => ({
-        id: c.id,
-        display_name: c.name,
-        raw_phone: c.phone,
-        normalized_phone: c.phone,
-        whatsapp_phone: c.whatsapp_phone,
-        governorate: c.governorate,
-        category: c.category,
-        validity_status: 'valid',
-        duplicate_status: false,
-        ready_to_send: true,
-        created_at: new Date().toISOString(),
-      }));
-      setContacts(mappedContacts);
+    
+    // Fetch all contacts with pagination (Supabase default limit is 1,000)
+    const allContacts: any[] = [];
+    let offset = 0;
+    const limit = 1000;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const { data: cData, error } = await supabase
+        .from("contact_view")
+        .select("*")
+        .order("name", { ascending: false })
+        .range(offset, offset + limit - 1);
+      
+      if (error) {
+        console.error("[Fetch] Error:", error);
+        break;
+      }
+      
+      if (cData && cData.length > 0) {
+        allContacts.push(...cData);
+        console.log(`[Fetch] Loaded ${allContacts.length} contacts so far...`);
+        
+        if (cData.length < limit) {
+          hasMore = false;
+        } else {
+          offset += limit;
+        }
+      } else {
+        hasMore = false;
+      }
     }
+    
+    console.log(`[Fetch] Total contacts loaded: ${allContacts.length}`);
+    
+    // Map view columns back to Contact type expected by components
+    const mappedContacts: Contact[] = allContacts.map((c: any) => ({
+      id: c.id,
+      display_name: c.name,
+      raw_phone: c.phone,
+      normalized_phone: c.phone,
+      whatsapp_phone: c.whatsapp_phone,
+      governorate: c.governorate,
+      category: c.category,
+      validity_status: 'valid',
+      duplicate_status: false,
+      ready_to_send: true,
+      created_at: new Date().toISOString(),
+    }));
+    setContacts(mappedContacts);
 
     const { data: mData } = await supabase.from("messages").select("status");
     
@@ -71,10 +102,10 @@ export default function App() {
     const replied = mData?.filter(m => m.status === "replied").length || 0;
 
     setStats({
-      totalContacts: cData?.length || 0,
-      validContacts: cData?.filter(c => c.validity_status === "valid").length || 0,
-      invalidContacts: cData?.filter(c => c.validity_status === "invalid").length || 0,
-      duplicatesRemoved: 0, // This is tracked during import
+      totalContacts: allContacts.length,
+      validContacts: allContacts.length, // All contacts in view are valid
+      invalidContacts: 0, // Simplified - no invalid count needed
+      duplicatesRemoved: 0,
       sentCount: sent,
       failedCount: failed,
       pendingCount: pending,
