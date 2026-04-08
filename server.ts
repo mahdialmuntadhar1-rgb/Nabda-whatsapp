@@ -25,33 +25,55 @@ const BATCH_SIZE = 20;
 const BATCH_DELAY_MS = 2000; // 2 seconds between batches
 
 // Send single message via Nabda API
-async function sendNabdaMessage(phone: string, message: string): Promise<{ success: boolean; messageId?: string; provider: string }> {
+async function sendNabdaMessage(
+  phone: string,
+  message: string,
+  variables?: string[]
+): Promise<{ success: boolean; messageId?: string; provider: string }> {
   // Format phone (remove + if present for Nabda)
   const formattedPhone = phone.replace(/^\+/, "");
 
-  const response = await fetch(`${NABDA_API_URL}/messages/send`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${NABDA_API_TOKEN}`,
-      "X-Instance-ID": NABDA_INSTANCE_ID
-    },
-    body: JSON.stringify({
-      phone: formattedPhone,
-      message: message
-    })
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Nabda API error: ${response.status} - ${error}`);
+  const payload: Record<string, unknown> = {
+    phone: formattedPhone,
+    message: message
+  };
+  if (variables && variables.length > 0) {
+    payload.variables = variables;
   }
 
-  const data = await response.json();
-  
+  let response: Response;
+  try {
+    response = await fetch(`${NABDA_API_URL}/messages/send`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${NABDA_API_TOKEN}`,
+        "X-Instance-ID": NABDA_INSTANCE_ID
+      },
+      body: JSON.stringify(payload)
+    });
+  } catch (networkError) {
+    throw new Error(`Network error reaching Nabda API: ${networkError instanceof Error ? networkError.message : String(networkError)}`);
+  }
+
+  // Always read as text first to avoid JSON parse crash on HTML error pages
+  const rawBody = await response.text();
+
+  if (!response.ok) {
+    throw new Error(`Nabda API error: ${response.status} - ${rawBody.slice(0, 200)}`);
+  }
+
+  let data: Record<string, unknown> = {};
+  try {
+    data = JSON.parse(rawBody);
+  } catch {
+    // Nabda returned non-JSON on a 2xx — treat as success with no messageId
+    console.warn("[Nabda] Response was not JSON:", rawBody.slice(0, 200));
+  }
+
   return {
     success: true,
-    messageId: data.messageId || data.id,
+    messageId: (data.messageId || data.id) as string | undefined,
     provider: "nabda"
   };
 }
@@ -103,6 +125,26 @@ async function logSendResult(
   }
 }
 
+// Replace template placeholders with contact data
+// Supports: {{1}} → name, {{2}} → governorate, {{name}}, {{governorate}}, {{category}}
+function personalizeMessage(template: string, contact: Record<string, unknown>): { message: string; variables: string[] } {
+  const name = String(contact.display_name || contact.name || "");
+  const governorate = String(contact.governorate || "");
+  const category = String(contact.category || "");
+
+  const variables = [name, governorate];
+
+  const message = template
+    .replace(/\{\{1\}\}/g, name)
+    .replace(/\{\{2\}\}/g, governorate)
+    .replace(/\{\{3\}\}/g, category)
+    .replace(/\{\{name\}\}/gi, name)
+    .replace(/\{\{governorate\}\}/gi, governorate)
+    .replace(/\{\{category\}\}/gi, category);
+
+  return { message, variables };
+}
+
 // Send campaign in batches with rate limiting
 async function sendCampaignBatches(
   contacts: any[],
@@ -131,12 +173,14 @@ async function sendCampaignBatches(
           throw new Error("No phone number available");
         }
 
-        const result = await sendNabdaMessage(phone, messageTemplate);
-        
+        const { message: personalizedMessage, variables } = personalizeMessage(messageTemplate, contact);
+
+        const result = await sendNabdaMessage(phone, personalizedMessage, variables);
+
         await logSendResult(
           contact.id,
           contact.normalized_phone,
-          messageTemplate,
+          personalizedMessage,
           "sent",
           undefined,
           result.messageId
@@ -148,11 +192,12 @@ async function sendCampaignBatches(
       } catch (error) {
         failed++;
         const errorMsg = error instanceof Error ? error.message : "Unknown error";
-        
+        const { message: personalizedMessage } = personalizeMessage(messageTemplate, contact);
+
         await logSendResult(
           contact.id,
           contact.normalized_phone || "",
-          messageTemplate,
+          personalizedMessage,
           "failed",
           errorMsg
         );
