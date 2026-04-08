@@ -43,6 +43,9 @@ async function sendNabdaMessage(
 
   let response: Response;
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
     response = await fetch(`${NABDA_API_URL}/messages/send`, {
       method: "POST",
       headers: {
@@ -50,8 +53,10 @@ async function sendNabdaMessage(
         "Authorization": `Bearer ${NABDA_API_TOKEN}`,
         "X-Instance-ID": NABDA_INSTANCE_ID
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
   } catch (networkError) {
     throw new Error(`Network error reaching Nabda API: ${networkError instanceof Error ? networkError.message : String(networkError)}`);
   }
