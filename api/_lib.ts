@@ -16,12 +16,11 @@ const NABDA_API_TOKEN =
 
 export async function sendNabdaMessage(
   phone: string,
-  message: string,
-  variables?: string[]
+  message: string
 ): Promise<{ success: boolean; messageId?: string; provider: string }> {
   const formattedPhone = phone.replace(/^\+/, "");
-  const payload: Record<string, unknown> = { phone: formattedPhone, message };
-  if (variables && variables.length > 0) payload.variables = variables;
+  // Send only phone + message — personalizeMessage already substituted variables locally
+  const payload = { phone: formattedPhone, message };
 
   let response: Response;
   try {
@@ -156,7 +155,7 @@ export async function sendCampaignBatches(
           contact
         );
         try {
-          const result = await sendNabdaMessage(phone, message, variables);
+          const result = await sendNabdaMessage(phone, message);
           await logSendResult(
             String(contact.id),
             String(contact.normalized_phone || ""),
@@ -170,6 +169,7 @@ export async function sendCampaignBatches(
           failed++;
           const errorMsg =
             error instanceof Error ? error.message : "Unknown error";
+          console.error(`[Nabda] FAILED phone=${phone} error=${errorMsg}`);
           await logSendResult(
             String(contact.id),
             String(contact.normalized_phone || ""),

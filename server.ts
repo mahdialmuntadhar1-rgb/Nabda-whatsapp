@@ -178,9 +178,9 @@ async function sendCampaignBatches(
           throw new Error("No phone number available");
         }
 
-        const { message: personalizedMessage, variables } = personalizeMessage(messageTemplate, contact);
+        const { message: personalizedMessage } = personalizeMessage(messageTemplate, contact);
 
-        const result = await sendNabdaMessage(phone, personalizedMessage, variables);
+        const result = await sendNabdaMessage(phone, personalizedMessage);
 
         await logSendResult(
           contact.id,
