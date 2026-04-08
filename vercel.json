@@ -1,15 +1,7 @@
 {
-  "version": 2,
   "buildCommand": "vite build",
   "outputDirectory": "dist",
-  "functions": {
-    "api/**/*.ts": {
-      "runtime": "nodejs20.x"
-    }
-  },
   "rewrites": [
-    { "source": "/api/send-whatsapp", "destination": "/api/send-whatsapp" },
-    { "source": "/api/campaign/send", "destination": "/api/campaign/send" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
