@@ -14,8 +14,17 @@ export function CampaignView() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedGovernorate, setSelectedGovernorate] = useState<string>("all");
   const [recipientCount, setRecipientCount] = useState(0);
+  const [sendLimit, setSendLimit] = useState<string>("all");
   const [isSending, setIsSending] = useState(false);
   const [progress, setProgress] = useState(0);
+
+  const sendLimitOptions = [
+    { value: "1", label: "1 (Test)" },
+    { value: "3", label: "3" },
+    { value: "10", label: "10" },
+    { value: "20", label: "20" },
+    { value: "all", label: "All" }
+  ];
 
   useEffect(() => {
     fetchInitialData();
@@ -23,7 +32,7 @@ export function CampaignView() {
 
   useEffect(() => {
     updateRecipientCount();
-  }, [selectedCategory, selectedGovernorate]);
+  }, [selectedCategory, selectedGovernorate, sendLimit]);
 
   const fetchInitialData = async () => {
     const { data: tData } = await supabase.from("templates").select("*");
@@ -46,7 +55,15 @@ export function CampaignView() {
     if (selectedGovernorate !== "all") query = query.eq("governorate", selectedGovernorate);
 
     const { count } = await query;
-    setRecipientCount(count || 0);
+    const total = count || 0;
+    
+    // Apply send limit to displayed count
+    if (sendLimit === "all") {
+      setRecipientCount(total);
+    } else {
+      const limitNum = parseInt(sendLimit, 10);
+      setRecipientCount(Math.min(limitNum, total));
+    }
   };
 
   const handleStartCampaign = async () => {
@@ -64,13 +81,14 @@ export function CampaignView() {
       if (selectedCategory !== "all") filters.category = selectedCategory;
       if (selectedGovernorate !== "all") filters.governorate = selectedGovernorate;
 
-      // Call bulk campaign API
+      // Call bulk campaign API with limit
       const response = await fetch("/api/campaign/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           templateId: selectedTemplate,
           filters: filters,
+          limit: sendLimit === "all" ? undefined : parseInt(sendLimit, 10),
           testMode: false
         })
       });
@@ -134,9 +152,10 @@ export function CampaignView() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Message Template</label>
-              <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Message Template</label>
+                <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a template" />
                 </SelectTrigger>
@@ -146,6 +165,22 @@ export function CampaignView() {
                   ))}
                 </SelectContent>
               </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <Filter className="h-4 w-4" /> Send Limit
+                </label>
+                <Select value={sendLimit} onValueChange={setSendLimit}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Recipients" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sendLimitOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <Button 
@@ -190,8 +225,8 @@ export function CampaignView() {
                 <span className="font-medium">{selectedGovernorate === "all" ? "All" : selectedGovernorate}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Status:</span>
-                <span className="text-green-600 font-medium">Valid Only</span>
+                <span className="text-muted-foreground">Send Limit:</span>
+                <span className="font-medium text-blue-600">{sendLimit === "all" ? "All" : sendLimit}</span>
               </div>
             </div>
           </CardContent>

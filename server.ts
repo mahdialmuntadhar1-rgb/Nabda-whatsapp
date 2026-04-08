@@ -213,7 +213,7 @@ async function startServer() {
 
   // Campaign bulk send with rate limiting
   app.post("/api/campaign/send", async (req, res) => {
-    const { templateId, filters = {}, testMode = false } = req.body;
+    const { templateId, filters = {}, limit, testMode = false } = req.body;
 
     if (!templateId) {
       return res.status(400).json({ error: "templateId is required" });
@@ -246,6 +246,8 @@ async function startServer() {
       }
       if (testMode) {
         contactQuery = contactQuery.limit(1);
+      } else if (limit && typeof limit === "number") {
+        contactQuery = contactQuery.limit(limit);
       }
 
       const { data: contacts, error: contactsError } = await contactQuery;
