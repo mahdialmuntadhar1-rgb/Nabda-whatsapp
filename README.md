@@ -1,20 +1,89 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# WhatsApp CRM (Nabda Orchestrator)
 
-# Run and deploy your AI Studio app
+Production-focused React + TypeScript + Vite CRM for controlled WhatsApp bulk outreach.
 
-This contains everything you need to run your app locally.
+## Locked Supabase Project (CRM only)
+This app is intentionally locked to:
+- `https://ujdsxzvvgaugypwtugdl.supabase.co`
 
-View your app in AI Studio: https://ai.studio/apps/e9a3a8c2-020e-4184-9f7c-a37545b63e13
+Do **not** point this CRM to Belive or any other Supabase project.
 
-## Run Locally
+## Core dashboard areas
+- Overview
+- Templates
+- Recipients
+- Test Send
+- Campaigns / Queue
+- Send Logs
+- Inbox / Replies (placeholder)
+- Settings
 
-**Prerequisites:**  Node.js
+## Run locally
+1. `npm install`
+2. (Optional) set these env vars to the same locked project values:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+3. `npm run dev`
+
+## Minimal schema
+Run migrations in order:
+1. `supabase/migrations/20260407_add_phone_normalization_fields.sql`
+2. `supabase/migrations/20260408_crm_core_tables.sql`
+3. `supabase/migrations/20260408_fix_crm_schema_and_ops.sql`
+4. `supabase/migrations/20260408_add_contact_import_audit_fields.sql`
 
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Cross-database recipient import (server-side only)
+Use the migration script to import recipients from a separate source Supabase project into the locked CRM project.
+
+Required environment variables:
+- `SOURCE_SUPABASE_URL`
+- `SOURCE_SUPABASE_SERVICE_ROLE_KEY`
+- `TARGET_SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_SERVICE_ROLE_KEY`)
+- Optional: `TARGET_SUPABASE_URL` (must stay `https://ujdsxzvvgaugypwtugdl.supabase.co`)
+
+Run in dry-run mode first:
+```bash
+npm run migrate:recipients -- --source-tables=businesses,contacts
+```
+
+Run write mode:
+```bash
+npm run migrate:recipients -- --source-tables=businesses,contacts --dry-run=false
+```
+
+The importer is idempotent via upsert conflict key: `(source_project, source_table, source_record_id)`.
+
+## Nabda integration
+- Frontend queues messages into `messages`.
+- Actual sending should happen from server-side Supabase Edge Functions:
+  - `nabda-send`
+  - `nabda-queue-processor`
+- Keep Nabda secrets server-side only.
+
+## Phone normalization
+Accepted Iraqi mobile inputs are normalized to `+9647XXXXXXXXX`:
+- `07xxxxxxxxx`
+- `7xxxxxxxxx`
+- `9647xxxxxxxxx`
+- `+9647xxxxxxxxx`
+
+Invalid/duplicate numbers are marked and excluded from sending.
+
+
+## Edge functions to deploy
+Deploy these to enable diagnostics and sending:
+- `crm-health`
+- `nabda-send`
+- `nabda-queue-processor`
+- `nabda-webhook`
+
+Example:
+```bash
+supabase functions deploy crm-health
+supabase functions deploy nabda-send
+supabase functions deploy nabda-queue-processor
+supabase functions deploy nabda-webhook
+```
+
+Webhook endpoint: `https://<project-ref>.supabase.co/functions/v1/nabda-webhook`
