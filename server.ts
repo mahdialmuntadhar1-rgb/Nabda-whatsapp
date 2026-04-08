@@ -281,12 +281,10 @@ async function startServer() {
         return res.status(404).json({ error: "Template not found" });
       }
 
-      // 2. Build contact query with filters
+      // 2. Build contact query with filters (use contact_view to match UI)
       let contactQuery = supabaseAdmin
-        .from("contacts")
-        .select("*")
-        .eq("validity_status", "valid")
-        .eq("ready_to_send", true);
+        .from("contact_view")
+        .select("*");
 
       if (filters.governorate) {
         contactQuery = contactQuery.eq("governorate", filters.governorate);

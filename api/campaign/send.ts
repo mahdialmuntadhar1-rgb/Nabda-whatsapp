@@ -60,12 +60,10 @@ export default async function handler(
       return;
     }
 
-    // 2. Build contact query
+    // 2. Build contact query (use contact_view to match UI)
     let contactQuery = supabaseAdmin
-      .from("contacts")
-      .select("*")
-      .eq("validity_status", "valid")
-      .eq("ready_to_send", true);
+      .from("contact_view")
+      .select("*");
 
     if (filters?.governorate)
       contactQuery = contactQuery.eq("governorate", filters.governorate);
