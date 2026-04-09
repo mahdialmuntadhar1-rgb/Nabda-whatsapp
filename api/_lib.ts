@@ -168,7 +168,9 @@ export async function sendCampaignBatches(
           failed++;
           const errorMsg =
             error instanceof Error ? error.message : "Unknown error";
-          console.error(`[Nabda] FAILED phone=${phone} error=${errorMsg}`);
+          console.error(`[Nabda] FAILED phone=${phone}`);
+          console.error(`[Nabda] ERROR: ${errorMsg.slice(0, 200)}`);
+          console.error(`[Nabda] ERROR2: ${errorMsg.slice(200, 400)}`);
           await logSendResult(
             String(contact.id),
             phone,
