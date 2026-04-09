@@ -96,7 +96,7 @@ export default async function handler(
     }
 
     // 3. Send in batches
-    const results = await sendCampaignBatches(contacts, template.body);
+    const results = await sendCampaignBatches(contacts, template.content);
 
     res.statusCode = 200;
     res.end(
