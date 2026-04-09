@@ -27,7 +27,7 @@ export async function sendNabdaMessage(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
-    response = await fetch(`${NABDA_API_URL}/messages/send`, {
+    response = await fetch(`${NABDA_API_URL}/send`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
