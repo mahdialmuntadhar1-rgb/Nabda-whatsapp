@@ -64,7 +64,10 @@ export default async function handler(req: Request, res: Response) {
         failed: 0,
         total: 0,
         testMode
-      }), { status: 200 });
+      }), { 
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
     }
 
     console.log(`[Campaign] Fetched ${contacts.length} contact(s) for campaign`);
@@ -80,13 +83,20 @@ export default async function handler(req: Request, res: Response) {
       batches: results.batches,
       provider: "nabda",
       testMode
-    }), { status: 200 });
+    }), { 
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
 
   } catch (error) {
     console.error("[Campaign] Failed:", error);
+    const errorMessage = error instanceof Error ? error.message : "Campaign failed";
     return new Response(JSON.stringify({
       success: false,
-      error: error instanceof Error ? error.message : "Campaign failed"
-    }), { status: 500 });
+      error: errorMessage
+    }), { 
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 }
