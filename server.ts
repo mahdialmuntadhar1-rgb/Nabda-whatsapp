@@ -326,9 +326,7 @@ async function startServer() {
       // 2. Build contact query with filters
       let contactQuery = supabaseAdmin
         .from("contact_view") // Use contact_view for consistent data
-        .select("*")
-        .eq("validity_status", "valid")
-        .eq("ready_to_send", true);
+        .select("*");
 
       if (filters.governorate && filters.governorate !== "all") {
         contactQuery = contactQuery.eq("governorate", filters.governorate);

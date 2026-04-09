@@ -33,9 +33,7 @@ export default async function handler(req: Request, res: Response) {
 
     let contactQuery = supabaseAdmin
       .from("contact_view")
-      .select("*")
-      .eq("validity_status", "valid")
-      .eq("ready_to_send", true);
+      .select("*");
 
     if (filters.governorate && filters.governorate !== "all") {
       contactQuery = contactQuery.eq("governorate", filters.governorate);
