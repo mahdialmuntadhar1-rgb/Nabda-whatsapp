@@ -170,21 +170,23 @@ async function sendCampaignBatches(
 
     // Process batch in parallel
     const batchPromises = batch.map(async (contact) => {
+      // contact_view uses 'phone'; contacts table uses 'normalized_phone'
+      const phone = String(contact.phone || contact.whatsapp_phone || contact.normalized_phone || "");
+
+      if (!phone) {
+        failed++;
+        console.error(`[Skipped] No phone for contact id=${contact.id}`);
+        return;
+      }
+
+      const { message: personalizedMessage } = personalizeMessage(messageTemplate, contact);
+
       try {
-        // contact_view uses 'phone'; contacts table uses 'normalized_phone'
-        const phone = contact.phone || contact.whatsapp_phone || contact.normalized_phone;
-        
-        if (!phone) {
-          throw new Error("No phone number available");
-        }
-
-        const { message: personalizedMessage } = personalizeMessage(messageTemplate, contact);
-
         const result = await sendNabdaMessage(phone, personalizedMessage);
 
         await logSendResult(
           contact.id,
-          contact.normalized_phone,
+          phone,
           personalizedMessage,
           "sent",
           undefined,
@@ -193,15 +195,14 @@ async function sendCampaignBatches(
 
         sent++;
         console.log(`[Sent] ${contact.display_name || contact.id} → ${phone}`);
-        
+
       } catch (error) {
         failed++;
         const errorMsg = error instanceof Error ? error.message : "Unknown error";
-        const { message: personalizedMessage } = personalizeMessage(messageTemplate, contact);
 
         await logSendResult(
           contact.id,
-          contact.normalized_phone || "",
+          phone,
           personalizedMessage,
           "failed",
           errorMsg
