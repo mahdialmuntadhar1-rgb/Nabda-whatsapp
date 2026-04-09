@@ -16,7 +16,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 // Nabda API config
-const NABDA_API_URL = process.env.NABDA_API_URL || "https://api.nabdaotp.com/inst/84cf1e71-6f8d-4411-9e58-de6a18e6007c";
+const NABDA_API_URL = process.env.NABDA_API_URL || "https://api.nabdaotp.com";
 const NABDA_INSTANCE_ID = process.env.NABDA_INSTANCE_ID || "84cf1e71-6f8d-4411-9e58-de6a18e6007c";
 const NABDA_API_TOKEN = process.env.NABDA_API_TOKEN || "sk_40e90a8b16fa4265a8f54ea3cc96b87d";
 
@@ -60,12 +60,11 @@ async function sendNabdaMessage(
   const formattedPhone = phone.replace(/^\+/, "");
 
   try {
-    const response = await fetch(`${NABDA_API_URL}/send`, {
+    const response = await fetch(`${NABDA_API_URL}/inst/${NABDA_INSTANCE_ID}/messages/send`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${NABDA_API_TOKEN}`,
-        "X-Instance-ID": NABDA_INSTANCE_ID
+        "Authorization": `Bearer ${NABDA_API_TOKEN}`
       },
       body: JSON.stringify({
         phone: formattedPhone,
