@@ -316,7 +316,7 @@ async function startServer() {
       }
 
       // 3. Process in batches with rate limiting
-      const results = await sendCampaignBatches(contacts, template.content);
+      const results = await sendCampaignBatches(contacts, template.body);
 
       return res.json({
         success: true,

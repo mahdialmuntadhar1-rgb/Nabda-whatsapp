@@ -11,7 +11,7 @@ export function TemplateEditor() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
-  const [content, setContent] = useState("");
+  const [body, setBody] = useState("");
 
   useEffect(() => {
     fetchTemplates();
@@ -23,9 +23,9 @@ export function TemplateEditor() {
   };
 
   const handleSave = async () => {
-    if (!name || !content) return;
+    if (!name || !body) return;
 
-    const templateData = { name, content };
+    const templateData = { name, body };
 
     try {
       if (editingId) {
@@ -36,7 +36,7 @@ export function TemplateEditor() {
         toast.success("Template created");
       }
       setName("");
-      setContent("");
+      setBody("");
       setEditingId(null);
       fetchTemplates();
     } catch (error: any) {
@@ -64,8 +64,8 @@ export function TemplateEditor() {
           <div className="space-y-2">
             <label className="text-sm font-medium">Content</label>
             <Textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
               placeholder="Hello {{name}}, welcome to our {{category}} service!"
               className="min-h-[150px]"
             />
@@ -79,7 +79,7 @@ export function TemplateEditor() {
               Save Template
             </Button>
             {editingId && (
-              <Button variant="outline" onClick={() => { setEditingId(null); setName(""); setContent(""); }}>
+              <Button variant="outline" onClick={() => { setEditingId(null); setName(""); setBody(""); }}>
                 Cancel
               </Button>
             )}
@@ -94,7 +94,7 @@ export function TemplateEditor() {
             <CardContent className="p-4 flex justify-between items-start">
               <div className="space-y-1">
                 <h4 className="font-medium">{template.name}</h4>
-                <p className="text-sm text-muted-foreground line-clamp-2">{template.content}</p>
+                <p className="text-sm text-muted-foreground line-clamp-2">{template.body}</p>
               </div>
               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <Button
@@ -103,7 +103,7 @@ export function TemplateEditor() {
                   onClick={() => {
                     setEditingId(template.id);
                     setName(template.name);
-                    setContent(template.content);
+                    setBody(template.body);
                   }}
                 >
                   <Plus className="h-4 w-4 rotate-45" />

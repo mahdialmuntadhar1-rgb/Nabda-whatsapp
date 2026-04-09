@@ -20,9 +20,10 @@ CREATE TABLE IF NOT EXISTS contacts (
 CREATE TABLE IF NOT EXISTS templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
-  content TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  body TEXT NOT NULL,
+  category TEXT,
+  type TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 3. Messages Table

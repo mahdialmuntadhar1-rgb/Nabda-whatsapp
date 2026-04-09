@@ -28,7 +28,9 @@ export type Contact = {
 export type Template = {
   id: string;
   name: string;
-  content: string;
+  body: string;
+  category?: string;
+  type?: string;
   created_at: string;
 };
 
