@@ -24,36 +24,80 @@ const NABDA_API_TOKEN = process.env.NABDA_API_TOKEN || "sk_40e90a8b16fa4265a8f54
 const BATCH_SIZE = 20;
 const BATCH_DELAY_MS = 2000; // 2 seconds between batches
 
+// Personalization helper - replace template placeholders
+function personalizeMessage(
+  template: string,
+  contact: any
+): string {
+  let message = template;
+
+  // Support multiple placeholder formats
+  const placeholders: Record<string, string> = {
+    "{{name}}": contact.name || contact.display_name || "",
+    "{{1}}": contact.name || contact.display_name || "",
+    "{{governorate}}": contact.governorate || "",
+    "{{2}}": contact.governorate || "",
+    "{{category}}": contact.category || "",
+    "{{3}}": contact.category || "",
+    "{{phone}}": contact.phone || contact.whatsapp_phone || "",
+    "{{4}}": contact.phone || contact.whatsapp_phone || ""
+  };
+
+  Object.entries(placeholders).forEach(([key, value]) => {
+    message = message.replace(new RegExp(key, "g"), value);
+  });
+
+  return message;
+}
+
 // Send single message via Nabda API
-async function sendNabdaMessage(phone: string, message: string): Promise<{ success: boolean; messageId?: string; provider: string }> {
+async function sendNabdaMessage(
+  phone: string,
+  message: string,
+  variables?: string[]
+): Promise<{ success: boolean; messageId?: string; provider: string }> {
   // Format phone (remove + if present for Nabda)
   const formattedPhone = phone.replace(/^\+/, "");
 
-  const response = await fetch(`${NABDA_API_URL}/messages/send`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${NABDA_API_TOKEN}`,
-      "X-Instance-ID": NABDA_INSTANCE_ID
-    },
-    body: JSON.stringify({
-      phone: formattedPhone,
-      message: message
-    })
-  });
+  try {
+    const response = await fetch(`${NABDA_API_URL}/send`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${NABDA_API_TOKEN}`,
+        "X-Instance-ID": NABDA_INSTANCE_ID
+      },
+      body: JSON.stringify({
+        phone: formattedPhone,
+        message: message
+      })
+    });
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Nabda API error: ${response.status} - ${error}`);
+    // Read response as text first to avoid JSON parsing errors
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${responseText.substring(0, 200)}`);
+    }
+
+    // Try to parse JSON, handle non-JSON responses
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      throw new Error(`Invalid JSON response from Nabda: ${responseText.substring(0, 200)}`);
+    }
+
+    return {
+      success: true,
+      messageId: data.messageId || data.id || data.message_id,
+      provider: "nabda"
+    };
+
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : "Unknown network error";
+    throw new Error(`Failed to send via Nabda: ${errorMsg}`);
   }
-
-  const data = await response.json();
-  
-  return {
-    success: true,
-    messageId: data.messageId || data.id,
-    provider: "nabda"
-  };
 }
 
 // Log send result to Supabase
@@ -123,41 +167,55 @@ async function sendCampaignBatches(
 
     // Process batch in parallel
     const batchPromises = batch.map(async (contact) => {
+      let phone: string | undefined;
       try {
-        // Use whatsapp_phone if available, otherwise normalized_phone
-        const phone = contact.whatsapp_phone || contact.normalized_phone;
-        
+        // Use phone from contact_view, fallback to whatsapp_phone
+        phone = contact.phone || contact.whatsapp_phone;
+
         if (!phone) {
           throw new Error("No phone number available");
         }
 
-        const result = await sendNabdaMessage(phone, messageTemplate);
-        
+        // Personalize message with contact data
+        const personalizedMessage = personalizeMessage(messageTemplate, contact);
+
+        // Build variables array for template variables support
+        const variables = [
+          contact.name || "",
+          contact.governorate || "",
+          contact.category || ""
+        ];
+
+        const result = await sendNabdaMessage(phone, personalizedMessage, variables);
+
         await logSendResult(
           contact.id,
-          contact.normalized_phone,
-          messageTemplate,
+          phone,
+          personalizedMessage,
           "sent",
           undefined,
           result.messageId
         );
 
         sent++;
-        console.log(`[Sent] ${contact.display_name || contact.id} → ${phone}`);
-        
+        console.log(`[Sent] ${contact.display_name || contact.id} (${contact.governorate}/${contact.category}) → ${phone}`);
+
       } catch (error) {
         failed++;
         const errorMsg = error instanceof Error ? error.message : "Unknown error";
-        
+
+        // Use personalized message in logs if available
+        const personalizedMessage = personalizeMessage(messageTemplate, contact);
+
         await logSendResult(
           contact.id,
-          contact.normalized_phone || "",
-          messageTemplate,
+          phone,
+          personalizedMessage,
           "failed",
           errorMsg
         );
 
-        console.error(`[Failed] ${contact.display_name || contact.id}: ${errorMsg}`);
+        console.error(`[Failed] ${contact.name || contact.id}: ${errorMsg}`);
       }
     });
 
@@ -211,6 +269,37 @@ async function startServer() {
     }
   });
 
+  // Webhook for Nabda delivery/reply status updates
+  app.post("/api/webhooks/nabda", async (req, res) => {
+    try {
+      const { event, payload } = req.body;
+
+      console.log(`[Webhook] Received Nabda event: ${event}`, payload);
+
+      // Handle different webhook events
+      if (event === "message.sent") {
+        // Message sent successfully
+        const { messageId, phone, status } = payload;
+        console.log(`[Webhook] Message ${messageId} sent to ${phone}`);
+      } else if (event === "message.received") {
+        // Incoming message reply
+        const { messageId, phone, message: incomingMessage } = payload;
+        console.log(`[Webhook] Reply from ${phone}: ${incomingMessage}`);
+        // Store reply in database for follow-up
+      } else if (event === "message.ack") {
+        // Delivery status change
+        const { messageId, status } = payload;
+        console.log(`[Webhook] Message ${messageId} status: ${status}`);
+      }
+
+      // Acknowledge receipt
+      return res.status(200).json({ success: true, received: true });
+    } catch (error) {
+      console.error("[Webhook] Error processing Nabda webhook:", error);
+      return res.status(200).json({ success: false });
+    }
+  });
+
   // Campaign bulk send with rate limiting
   app.post("/api/campaign/send", async (req, res) => {
     const { templateId, filters = {}, limit, testMode = false } = req.body;
@@ -231,23 +320,30 @@ async function startServer() {
         return res.status(404).json({ error: "Template not found" });
       }
 
+      console.log(`[Campaign] Using template: "${template.name}"`);
+      console.log(`[Campaign] Template content: "${template.body}"`);
+
       // 2. Build contact query with filters
       let contactQuery = supabaseAdmin
-        .from("contacts")
+        .from("contact_view") // Use contact_view for consistent data
         .select("*")
         .eq("validity_status", "valid")
         .eq("ready_to_send", true);
 
-      if (filters.governorate) {
+      if (filters.governorate && filters.governorate !== "all") {
         contactQuery = contactQuery.eq("governorate", filters.governorate);
       }
-      if (filters.category) {
+      if (filters.category && filters.category !== "all") {
         contactQuery = contactQuery.eq("category", filters.category);
       }
+
+      // Apply limit
       if (testMode) {
         contactQuery = contactQuery.limit(1);
-      } else if (limit && typeof limit === "number") {
+        console.log("[Campaign] Test mode: fetching 1 contact");
+      } else if (limit && typeof limit === "number" && limit > 0) {
         contactQuery = contactQuery.limit(limit);
+        console.log(`[Campaign] Limit: ${limit} contacts`);
       }
 
       const { data: contacts, error: contactsError } = await contactQuery;
@@ -262,12 +358,15 @@ async function startServer() {
           message: "No contacts match the filters",
           sent: 0,
           failed: 0,
-          total: 0
+          total: 0,
+          testMode
         });
       }
 
+      console.log(`[Campaign] Fetched ${contacts.length} contact(s) for campaign`);
+
       // 3. Process in batches with rate limiting
-      const results = await sendCampaignBatches(contacts, template.content);
+      const results = await sendCampaignBatches(contacts, template.body);
 
       return res.json({
         success: true,
@@ -276,7 +375,8 @@ async function startServer() {
         sent: results.sent,
         failed: results.failed,
         batches: results.batches,
-        provider: "nabda"
+        provider: "nabda",
+        testMode
       });
 
     } catch (error) {

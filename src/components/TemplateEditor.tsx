@@ -66,12 +66,19 @@ export function TemplateEditor() {
             <Textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="Hello {{name}}, welcome to our {{category}} service!"
+              placeholder="مرحباً {{name}}، أهلاً بك في خدمات {{category}} لدينا!"
               className="min-h-[150px]"
             />
-            <p className="text-xs text-muted-foreground">
-              Use {"{{name}}"} and {"{{category}}"} as placeholders.
-            </p>
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p className="font-semibold">Available placeholders:</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                <li>{"{{name}}"} - Business name</li>
+                <li>{"{{governorate}}"} - Governorate/city</li>
+                <li>{"{{category}}"} - Business category</li>
+                <li>{"{{phone}}"} - Phone number</li>
+              </ul>
+              <p className="text-yellow-600 mt-2">💡 Tip: Use Arabic text for better engagement in Iraq</p>
+            </div>
           </div>
           <div className="flex gap-2">
             <Button onClick={handleSave} className="w-full">

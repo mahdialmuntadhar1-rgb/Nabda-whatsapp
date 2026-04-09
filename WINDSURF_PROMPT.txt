@@ -1,0 +1,59 @@
+================================================================================
+WINDSURF PROMPT - Copy and paste this entire text into Windsurf
+================================================================================
+
+I have a Nabda WhatsApp messaging system that needs final deployment preparation.
+All code is complete and in the repo. I need Windsurf to:
+
+1. VERIFY all implementation files exist:
+   ✅ server.ts (should have personalizeMessage function)
+   ✅ src/lib/gemini-helper.ts (new file with AI assistant)
+   ✅ src/components/TemplateABTest.tsx (new file with A/B testing)
+   ✅ src/components/CampaignView.tsx (should have test mode)
+   ✅ src/components/TemplateEditor.tsx (should have better docs)
+
+2. BUILD for production:
+   - Run: npm install
+   - Run: npm run build
+   - Verify no errors
+   - Ensure dist/ folder created
+
+3. VERIFY code quality:
+   - Run: npm run lint (or tsc --noEmit)
+   - Check for TypeScript errors
+   - Verify all imports resolve
+
+4. COMMIT changes:
+   - Stage all files: git add .
+   - Commit: git commit -m "Deploy: Nabda v2.0 - Personalization + AI + A/B Testing"
+   - Show me the git status
+
+5. FINAL CHECKLIST before pushing:
+   - ✅ Build successful
+   - ✅ No TypeScript errors
+   - ✅ All new files exist
+   - ✅ All modifications in place
+   - ✅ Ready to git push
+
+Key Files to Check:
+- server.ts has: personalizeMessage(), sendNabdaMessage() improvements, sendCampaignBatches() with personalization, /api/webhooks/nabda endpoint
+- CampaignView.tsx has: confirmation dialog, testMode support, better toast notifications
+- New: src/lib/gemini-helper.ts (generateFAQResponse, generateFollowUpMessage, analyzeSentiment)
+- New: src/components/TemplateABTest.tsx (A/B testing UI)
+
+Status to confirm:
+- All code is implemented ✅
+- Build passes ✅
+- Ready for: git push origin main
+- Then Vercel auto-deploys ✅
+
+After verification, tell me:
+1. Build status: PASS/FAIL
+2. Lint status: PASS/FAIL
+3. File verification: PASS/FAIL
+4. Git commit status: PASS/FAIL
+5. Final status: READY TO DEPLOY Y/N
+
+This is production-ready code. Just verify everything works, then I'll push to main.
+
+================================================================================

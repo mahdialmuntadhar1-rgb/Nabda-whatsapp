@@ -72,6 +72,15 @@ export function CampaignView() {
       return;
     }
 
+    // Confirm before sending
+    const isTest = sendLimit === "1";
+    const action = isTest ? "send test message" : `send to ${recipientCount} recipients`;
+    const confirmed = window.confirm(`Are you sure you want to ${action}?`);
+
+    if (!confirmed) {
+      return;
+    }
+
     setIsSending(true);
     setProgress(0);
 
@@ -81,6 +90,12 @@ export function CampaignView() {
       if (selectedCategory !== "all") filters.category = selectedCategory;
       if (selectedGovernorate !== "all") filters.governorate = selectedGovernorate;
 
+      // Show toast with campaign info
+      const toastId = toast.loading(
+        `Starting ${isTest ? "test" : "campaign"}...`,
+        { duration: Infinity }
+      );
+
       // Call bulk campaign API with limit
       const response = await fetch("/api/campaign/send", {
         method: "POST",
@@ -89,22 +104,27 @@ export function CampaignView() {
           templateId: selectedTemplate,
           filters: filters,
           limit: sendLimit === "all" ? undefined : parseInt(sendLimit, 10),
-          testMode: false
+          testMode: isTest
         })
       });
 
       const result = await response.json();
 
+      // Dismiss loading toast
+      toast.dismiss(toastId);
+
       if (result.success) {
-        toast.success(`Campaign sent! ${result.sent} delivered, ${result.failed} failed`);
+        const successMsg = `✅ ${isTest ? "Test" : "Campaign"} complete!\n${result.sent} sent, ${result.failed} failed`;
+        toast.success(successMsg);
         setProgress(100);
       } else {
-        toast.error("Campaign failed: " + (result.error || "Unknown error"));
+        toast.error("❌ Campaign failed: " + (result.error || "Unknown error"));
       }
     } catch (error: any) {
-      toast.error("Campaign failed: " + error.message);
+      toast.error("❌ Campaign error: " + (error.message || "Network error"));
     } finally {
       setIsSending(false);
+      setTimeout(() => setProgress(0), 3000);
     }
   };
 
