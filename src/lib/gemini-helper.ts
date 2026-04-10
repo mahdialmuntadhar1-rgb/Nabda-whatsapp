@@ -1,12 +1,6 @@
-import { GoogleGenerativeAI } from "@google/genai";
-
-const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-
-if (!geminiApiKey) {
-  console.warn("Gemini API key not configured. AI features will be unavailable.");
-}
-
-export const gemini = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
+// AI features are currently disabled
+// To enable: npm install @google/genai and add VITE_GEMINI_API_KEY to .env
+export const gemini = null;
 
 /**
  * Generate an AI-powered FAQ response for business inquiries
