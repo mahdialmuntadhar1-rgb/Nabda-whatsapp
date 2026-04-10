@@ -14,17 +14,8 @@ export function CampaignView() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedGovernorate, setSelectedGovernorate] = useState<string>("all");
   const [recipientCount, setRecipientCount] = useState(0);
-  const [sendLimit, setSendLimit] = useState<string>("all");
   const [isSending, setIsSending] = useState(false);
   const [progress, setProgress] = useState(0);
-
-  const sendLimitOptions = [
-    { value: "1", label: "1 (Test)" },
-    { value: "3", label: "3" },
-    { value: "10", label: "10" },
-    { value: "20", label: "20" },
-    { value: "all", label: "All" }
-  ];
 
   useEffect(() => {
     fetchInitialData();
@@ -32,14 +23,13 @@ export function CampaignView() {
 
   useEffect(() => {
     updateRecipientCount();
-  }, [selectedCategory, selectedGovernorate, sendLimit]);
+  }, [selectedCategory, selectedGovernorate]);
 
   const fetchInitialData = async () => {
     const { data: tData } = await supabase.from("templates").select("*");
     if (tData) setTemplates(tData);
 
-    // Use contact_view for fetching filter options
-    const { data: cData } = await supabase.from("contact_view").select("category, governorate");
+    const { data: cData } = await supabase.from("contacts").select("category, governorate");
     if (cData) {
       const cats = Array.from(new Set(cData.map(c => c.category).filter(Boolean))) as string[];
       const govs = Array.from(new Set(cData.map(c => c.governorate).filter(Boolean))) as string[];
@@ -49,21 +39,12 @@ export function CampaignView() {
   };
 
   const updateRecipientCount = async () => {
-    // Use contact_view - all contacts are considered valid
-    let query = supabase.from("contact_view").select("id", { count: "exact", head: true });
+    let query = supabase.from("contacts").select("id", { count: "exact", head: true }).eq("validity_status", "valid");
     if (selectedCategory !== "all") query = query.eq("category", selectedCategory);
     if (selectedGovernorate !== "all") query = query.eq("governorate", selectedGovernorate);
 
     const { count } = await query;
-    const total = count || 0;
-    
-    // Apply send limit to displayed count
-    if (sendLimit === "all") {
-      setRecipientCount(total);
-    } else {
-      const limitNum = parseInt(sendLimit, 10);
-      setRecipientCount(Math.min(limitNum, total));
-    }
+    setRecipientCount(count || 0);
   };
 
   const handleStartCampaign = async () => {
@@ -72,59 +53,85 @@ export function CampaignView() {
       return;
     }
 
-    // Confirm before sending
-    const isTest = sendLimit === "1";
-    const action = isTest ? "send test message" : `send to ${recipientCount} recipients`;
-    const confirmed = window.confirm(`Are you sure you want to ${action}?`);
-
-    if (!confirmed) {
-      return;
-    }
+    const template = templates.find(t => t.id === selectedTemplate);
+    if (!template) return;
 
     setIsSending(true);
     setProgress(0);
 
     try {
-      // Build filters
-      const filters: any = {};
-      if (selectedCategory !== "all") filters.category = selectedCategory;
-      if (selectedGovernorate !== "all") filters.governorate = selectedGovernorate;
+      // Fetch recipients
+      let query = supabase.from("contacts").select("*").eq("validity_status", "valid");
+      if (selectedCategory !== "all") query = query.eq("category", selectedCategory);
+      if (selectedGovernorate !== "all") query = query.eq("governorate", selectedGovernorate);
 
-      // Show toast with campaign info
-      const toastId = toast.loading(
-        `Starting ${isTest ? "test" : "campaign"}...`,
-        { duration: Infinity }
-      );
-
-      // Call bulk campaign API with limit
-      const response = await fetch("/api/campaign/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          templateId: selectedTemplate,
-          filters: filters,
-          limit: sendLimit === "all" ? undefined : parseInt(sendLimit, 10),
-          testMode: isTest
-        })
-      });
-
-      const result = await response.json();
-
-      // Dismiss loading toast
-      toast.dismiss(toastId);
-
-      if (result.success) {
-        const successMsg = `✅ ${isTest ? "Test" : "Campaign"} complete!\n${result.sent} sent, ${result.failed} failed`;
-        toast.success(successMsg);
-        setProgress(100);
-      } else {
-        toast.error("❌ Campaign failed: " + (result.error || "Unknown error"));
+      const { data: recipients } = await query;
+      if (!recipients || recipients.length === 0) {
+        toast.error("No recipients found");
+        setIsSending(false);
+        return;
       }
+
+      toast.info(`Starting campaign for ${recipients.length} recipients...`);
+
+      for (let i = 0; i < recipients.length; i++) {
+        const contact = recipients[i];
+        
+        // Replace placeholders
+        const messageText = template.content
+          .replace(/{{name}}/g, contact.display_name)
+          .replace(/{{category}}/g, contact.category || "");
+
+        // Create message record
+        const { data: msgData, error: msgError } = await supabase.from("messages").insert([{
+          contact_id: contact.id,
+          normalized_phone: contact.normalized_phone,
+          message: messageText,
+          status: "pending"
+        }]).select().single();
+
+        if (msgError) continue;
+
+        // Call our backend to send the message
+        try {
+          const response = await fetch("/api/send-whatsapp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              phone: contact.normalized_phone,
+              message: messageText
+            })
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            await supabase.from("messages").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", msgData.id);
+            await supabase.from("send_logs").insert([{
+              message_id: msgData.id,
+              status: "success",
+              response: result
+            }]);
+          } else {
+            await supabase.from("messages").update({ status: "failed", error: result.error }).eq("id", msgData.id);
+          }
+        } catch (err) {
+          await supabase.from("messages").update({ status: "failed", error: "Network error" }).eq("id", msgData.id);
+        }
+
+        setProgress(Math.round(((i + 1) / recipients.length) * 100));
+        
+        // Rate limiting: 4 seconds between messages
+        if (i < recipients.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 4000));
+        }
+      }
+
+      toast.success("Campaign completed!");
     } catch (error: any) {
-      toast.error("❌ Campaign error: " + (error.message || "Network error"));
+      toast.error("Campaign failed: " + error.message);
     } finally {
       setIsSending(false);
-      setTimeout(() => setProgress(0), 3000);
     }
   };
 
@@ -172,10 +179,9 @@ export function CampaignView() {
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Message Template</label>
-                <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Message Template</label>
+              <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a template" />
                 </SelectTrigger>
@@ -185,22 +191,6 @@ export function CampaignView() {
                   ))}
                 </SelectContent>
               </Select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium flex items-center gap-2">
-                  <Filter className="h-4 w-4" /> Send Limit
-                </label>
-                <Select value={sendLimit} onValueChange={setSendLimit}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Recipients" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sendLimitOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
 
             <Button 
@@ -245,8 +235,8 @@ export function CampaignView() {
                 <span className="font-medium">{selectedGovernorate === "all" ? "All" : selectedGovernorate}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Send Limit:</span>
-                <span className="font-medium text-blue-600">{sendLimit === "all" ? "All" : sendLimit}</span>
+                <span className="text-muted-foreground">Status:</span>
+                <span className="text-green-600 font-medium">Valid Only</span>
               </div>
             </div>
           </CardContent>
