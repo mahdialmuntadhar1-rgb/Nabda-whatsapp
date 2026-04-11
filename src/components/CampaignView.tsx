@@ -6,7 +6,7 @@ import { supabase, Contact, Template } from "@/lib/supabase";
 import { toast } from "sonner";
 import { Play, Loader2, Filter, Users } from "lucide-react";
 
-export function CampaignView() {
+export function CampaignView({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
   const [categories, setCategories] = useState<string[]>([]);
@@ -181,16 +181,25 @@ export function CampaignView() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Message Template</label>
-              <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a template" />
-                </SelectTrigger>
-                <SelectContent>
-                  {templates.map((t, i) => (
-                    <SelectItem key={`tpl-${t.id}-${i}`} value={t.id}>{t.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {templates.length === 0 ? (
+                <div className="p-4 border border-dashed rounded-lg bg-slate-50 text-center">
+                  <p className="text-sm text-muted-foreground mb-2">No templates found.</p>
+                  <Button variant="outline" size="sm" onClick={() => onNavigate?.("templates")}>
+                    Create Template
+                  </Button>
+                </div>
+              ) : (
+                <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates.map((t, i) => (
+                      <SelectItem key={`tpl-${t.id}-${i}`} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <Button 

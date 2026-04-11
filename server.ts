@@ -31,6 +31,24 @@ async function startServer() {
     // Simulate success/failure
     const success = Math.random() > 0.1; // 90% success rate
 
+    /* 
+    REAL INTEGRATION EXAMPLE (Nabda):
+    try {
+      const response = await fetch("https://api.nabda.com/v1/send", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.NABDA_API_KEY}`
+        },
+        body: JSON.stringify({ to: phone, text: message })
+      });
+      const result = await response.json();
+      return res.json(result);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    */
+
     if (success) {
       console.log(`[WhatsApp] Sent to ${phone}: ${message.substring(0, 30)}...`);
       return res.json({

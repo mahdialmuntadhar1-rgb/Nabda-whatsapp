@@ -11,11 +11,12 @@ import { LogsView } from "@/components/LogsView";
 import { SupabaseImport } from "@/components/SupabaseImport";
 import { supabase, Contact } from "@/lib/supabase";
 import { Toaster } from "sonner";
-import { LayoutDashboard, Users, Upload, FileText, Send, History } from "lucide-react";
+import { LayoutDashboard, Users, Upload, FileText, Send, History, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("overview");
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [stats, setStats] = useState({
     totalContacts: 0,
@@ -43,26 +44,31 @@ export default function App() {
 
   const fetchData = async () => {
     if (!supabase) return;
-    const { data: cData } = await supabase.from("contacts").select("*").order("created_at", { ascending: false });
-    if (cData) setContacts(cData);
+    setIsRefreshing(true);
+    try {
+      const { data: cData } = await supabase.from("contacts").select("*").order("created_at", { ascending: false });
+      if (cData) setContacts(cData);
 
-    const { data: mData } = await supabase.from("messages").select("status");
-    
-    const sent = mData?.filter(m => m.status === "sent").length || 0;
-    const failed = mData?.filter(m => m.status === "failed").length || 0;
-    const pending = mData?.filter(m => m.status === "pending").length || 0;
-    const replied = mData?.filter(m => m.status === "replied").length || 0;
+      const { data: mData } = await supabase.from("messages").select("status");
+      
+      const sent = mData?.filter(m => m.status === "sent").length || 0;
+      const failed = mData?.filter(m => m.status === "failed").length || 0;
+      const pending = mData?.filter(m => m.status === "pending").length || 0;
+      const replied = mData?.filter(m => m.status === "replied").length || 0;
 
-    setStats({
-      totalContacts: cData?.length || 0,
-      validContacts: cData?.filter(c => c.validity_status === "valid").length || 0,
-      invalidContacts: cData?.filter(c => c.validity_status === "invalid").length || 0,
-      duplicatesRemoved: 0, // This is tracked during import
-      sentCount: sent,
-      failedCount: failed,
-      pendingCount: pending,
-      repliesCount: replied,
-    });
+      setStats({
+        totalContacts: cData?.length || 0,
+        validContacts: cData?.filter(c => c.validity_status === "valid").length || 0,
+        invalidContacts: cData?.filter(c => c.validity_status === "invalid").length || 0,
+        duplicatesRemoved: 0, // This is tracked during import
+        sentCount: sent,
+        failedCount: failed,
+        pendingCount: pending,
+        repliesCount: replied,
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   return (
@@ -84,9 +90,19 @@ export default function App() {
             <span className="ml-2 px-2 py-0.5 bg-blue-50 text-blue-600 text-[10px] font-bold uppercase rounded tracking-wider">Beta</span>
           </div>
           <div className="flex items-center gap-4">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={fetchData} 
+              disabled={isRefreshing}
+              className="text-slate-500 hover:text-blue-600"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
             <div className="flex items-center gap-2 text-sm text-slate-500">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              Connected to Supabase
+              Connected
             </div>
           </div>
         </div>
@@ -108,12 +124,17 @@ export default function App() {
           <AnimatePresence mode="wait">
             <TabsContent key="overview" value="overview" className="space-y-8 focus-visible:outline-none">
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                <DashboardStats {...stats} />
+                <DashboardStats {...stats} onStatClick={setActiveTab} />
                 <div className="mt-8 grid gap-6 md:grid-cols-2">
                   <Card className="border-none shadow-sm">
-                    <CardHeader>
-                      <CardTitle>Recent Activity</CardTitle>
-                      <CardDescription>Latest message statuses and contact additions.</CardDescription>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                      <div>
+                        <CardTitle>Recent Activity</CardTitle>
+                        <CardDescription>Latest message statuses and contact additions.</CardDescription>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => setActiveTab("logs")} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+                        View All
+                      </Button>
                     </CardHeader>
                     <CardContent>
                       <LogsView />
@@ -163,7 +184,7 @@ export default function App() {
 
             <TabsContent key="campaigns" value="campaigns" className="focus-visible:outline-none">
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <CampaignView />
+                <CampaignView onNavigate={setActiveTab} />
               </motion.div>
             </TabsContent>
 
