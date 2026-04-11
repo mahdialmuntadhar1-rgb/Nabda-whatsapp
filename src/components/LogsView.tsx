@@ -8,6 +8,8 @@ export function LogsView() {
   const [logs, setLogs] = useState<any[]>([]);
 
   useEffect(() => {
+    if (!supabase) return;
+    
     fetchLogs();
     const subscription = supabase
       .channel("messages-logs")
@@ -20,6 +22,8 @@ export function LogsView() {
   }, []);
 
   const fetchLogs = async () => {
+    if (!supabase) return;
+    
     const { data } = await supabase
       .from("messages")
       .select(`

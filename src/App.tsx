@@ -29,6 +29,8 @@ export default function App() {
   });
 
   useEffect(() => {
+    if (!supabase) return;
+    
     fetchData();
     
     // Real-time subscriptions
